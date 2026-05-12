@@ -1,6 +1,7 @@
 package com.hao.redis.common.util;
 
 import com.hao.redis.common.interceptor.SimpleRateLimiter;
+import com.hao.redis.common.monitor.RedisMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,6 +37,7 @@ public class RedisRateLimiter {
     private final DefaultRedisScript<Long> limitScript;
     private final SimpleRateLimiter fallbackRateLimiter;
     private final double redisFallbackRatio;
+    private final RedisMetrics redisMetrics;
 
     // Lua 脚本：固定窗口计数器
     // KEYS[1]: 限流键
@@ -66,11 +68,13 @@ public class RedisRateLimiter {
      */
     public RedisRateLimiter(StringRedisTemplate stringRedisTemplate,
                             SimpleRateLimiter fallbackRateLimiter,
+                            RedisMetrics redisMetrics,
                             @Value("${rate.limit.redis-fallback-ratio:0.5}") double redisFallbackRatio) {
         // 实现思路：
         // 1. 注入模板并完成脚本初始化。
         this.stringRedisTemplate = stringRedisTemplate;
         this.fallbackRateLimiter = fallbackRateLimiter;
+        this.redisMetrics = redisMetrics;
         this.redisFallbackRatio = normalizeFallbackRatio(redisFallbackRatio);
         // 初始化 Lua 脚本
         this.limitScript = new DefaultRedisScript<>();
@@ -111,7 +115,16 @@ public class RedisRateLimiter {
             );
 
             // Lua脚本返回1表示允许，0表示拒绝
-            return result != null && result == 1L;
+            boolean allowed = result != null && result == 1L;
+            
+            // 埋点监控
+            if (allowed) {
+                redisMetrics.recordRateLimitHit();
+            } else {
+                redisMetrics.recordRateLimitBlock();
+            }
+            
+            return allowed;
 
         } catch (Exception e) {
             // 实现思路：

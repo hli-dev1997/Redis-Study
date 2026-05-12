@@ -1,6 +1,7 @@
 package com.hao.redis.common.util;
 
 import com.hao.redis.common.model.RedisLogicalData;
+import com.hao.redis.common.monitor.RedisMetrics;
 import com.hao.redis.integration.redis.RedisClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ public class CacheBreakdownUtil {
 
     @Autowired
     private RedisClient<String> redisClient;
+
+    @Autowired
+    private RedisMetrics redisMetrics;
 
     // 注入 IO 密集型线程池（用于异步查库）
     // 修正：使用 ThreadPoolConfig 中定义的 Bean 名称 "ioTaskExecutor"
@@ -103,6 +107,9 @@ public class CacheBreakdownUtil {
 
         if (isLock) {
             log.info("逻辑过期_获取锁成功_启动异步重建|Logical_expire_async_rebuild,key={}", key);
+            // 埋点监控：记录一次缓存重建
+            redisMetrics.recordCacheRebuild();
+            
             // 6. 开启独立线程重建缓存
             executorService.execute(() -> {
                 try {

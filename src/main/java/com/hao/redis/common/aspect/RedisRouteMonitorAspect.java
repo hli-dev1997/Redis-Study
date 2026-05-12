@@ -67,7 +67,7 @@ public class RedisRouteMonitorAspect {
             String node = topologyCache.getNodeBySlot(slot);
 
             // 3. 打印日志
-            log.info("Redis路由监控|Redis_route_monitor, key={}, slot={}, node={}", key, slot, node);
+//            log.info("Redis路由监控|Redis_route_monitor, key={}, slot={}, node={}", key, slot, node);
 
         } catch (Exception e) {
             log.warn("Redis路由监控异常|Redis_route_monitor_error", e);

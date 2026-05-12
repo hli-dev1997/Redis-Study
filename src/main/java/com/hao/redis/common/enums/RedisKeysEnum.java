@@ -99,7 +99,36 @@ public enum RedisKeysEnum {
      * 类型：字符串
      * 用法：SETEX weibo:null:5001 300 "1"
      */
-    WEIBO_NULL_CACHE("weibo:null:", "微博不存在标记缓存");
+    WEIBO_NULL_CACHE("weibo:null:", "微博不存在标记缓存"),
+
+    // ============================
+    // 5. 选股信号多级缓存（L2 Redis）
+    // ============================
+    /**
+     * 选股信号 L2 Redis 缓存键前缀
+     * 类型：字符串（JSON 序列化的 List<StockSignal>）
+     * 完整键：stock:signal:MOMENTUM_V2:2025-05-11
+     * TTL：1800s ± 随机抖动（防雪崩）
+     * 失效方式：AFTER_COMMIT 事件触发异步 DEL
+     */
+    STOCK_SIGNAL_CACHE("stock:signal:", "选股信号L2缓存键前缀"),
+
+    /**
+     * 选股信号空值缓存键前缀（防穿透兜底）
+     * 类型：字符串，值固定为 "1"
+     * 完整键：stock:signal:null:MOMENTUM_V2:2025-05-11
+     * TTL：60s
+     * 场景：布隆过滤器误判 → DB 查为空 → 写此键 → 下次拦截
+     */
+    STOCK_SIGNAL_NULL_CACHE("stock:signal:null:", "选股信号空值缓存键前缀"),
+
+    /**
+     * 选股信号分布式锁键前缀（防击穿）
+     * 类型：字符串（DistributedLockService 内部拼接 "lock:" 前缀）
+     * 完整锁键：lock:signal:lock:MOMENTUM_V2:2025-05-11
+     * 锁策略：tryLock() 非阻塞，失锁等待 30ms 后重读缓存
+     */
+    STOCK_SIGNAL_LOCK("signal:lock:", "选股信号分布式锁键前缀");
 
 
     private final String key;

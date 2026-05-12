@@ -37,6 +37,12 @@ import java.time.Duration;
  * - 读取 RedisProperties 组装集群与连接池配置。
  * - 显式关闭连接共享以提高并发吞吐。
  * - 启动时输出集群节点，便于健康校验。
+ * <p>
+ * 【性能调优 - 重点说明】
+ * 1. 连接独占模式：通过 setShareNativeConnection(false) 强制 Lettuce 配合连接池，
+ *    在高并发下利用多条物理连接并行处理，避免了单条物理连接在接收万级并发时的处理瓶颈。
+ * 2. 连接池水位控制：结合业务 QPS 设定合理的 max-total 和 max-idle，
+ *    保持热连接常驻，消除频繁建立 TCP 连接握手的开销。
  */
 @Slf4j
 @Configuration

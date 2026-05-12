@@ -9,7 +9,9 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.HashSet;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -59,7 +61,7 @@ public class RedisClusterTopologyCache implements CommandLineRunner {
      */
     @Scheduled(fixedRate = 30000)
     public void refreshTopology() {
-        log.info("开始刷新Redis集群拓扑|Start_refreshing_redis_cluster_topology");
+//        log.info("开始刷新Redis集群拓扑|Start_refreshing_redis_cluster_topology");
         try (RedisClusterConnection connection = connectionFactory.getClusterConnection()) {
             // 获取集群所有主节点
             Iterable<RedisClusterNode> masterNodes = connection.clusterGetNodes();
@@ -91,11 +93,26 @@ public class RedisClusterTopologyCache implements CommandLineRunner {
             if (!newCache.isEmpty()) {
                 slotNodeCache.clear();
                 slotNodeCache.putAll(newCache);
-                log.info("Redis集群拓扑刷新完成|Redis_cluster_topology_refreshed, masterCount={}", newCache.size());
+//                log.info("Redis集群拓扑刷新完成|Redis_cluster_topology_refreshed, masterCount={}", newCache.size());
             }
         } catch (Exception e) {
             log.error("刷新Redis集群拓扑失败|Refresh_redis_cluster_topology_fail", e);
         }
+    }
+
+    /**
+     * 获取当前集群所有 Master 节点的唯一标识集合 (IP:Port)
+     *
+     * <p>用于 {@link com.hao.redis.common.util.HotKeyShardingUtil} 判断
+     * 何时已经为所有节点找到了对应的分片 Key，避免无谓地遍历全部后缀。
+     *
+     * @return Master 节点标识集合，例如 {"192.168.254.2:6401", "192.168.254.2:6402", "192.168.254.3:6401"}
+     */
+    public Set<String> getAllNodes() {
+        if (slotNodeCache.isEmpty()) {
+            refreshTopology();
+        }
+        return new HashSet<>(slotNodeCache.values());
     }
 
     /**

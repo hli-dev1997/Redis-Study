@@ -1,6 +1,7 @@
 package com.hao.redis.common.util;
 
 import com.hao.redis.common.interceptor.SimpleRateLimiter;
+import com.hao.redis.common.monitor.RedisMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,7 +14,6 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -69,7 +69,7 @@ public class RedisRateLimiterTest {
     @DisplayName("正常流程测试：窗口内请求未超限")
     void testTryAcquire_Success_WithinLimit() {
         // 正常流程使用真实依赖
-        redisRateLimiter = new RedisRateLimiter(realRedisTemplate, mock(SimpleRateLimiter.class), redisFallbackRatio);
+        redisRateLimiter = new RedisRateLimiter(realRedisTemplate, mock(SimpleRateLimiter.class), mock(RedisMetrics.class), redisFallbackRatio);
         
         int limit = 3;
         int window = 10;
@@ -88,7 +88,7 @@ public class RedisRateLimiterTest {
     @Test
     @DisplayName("窗口重置测试：等待窗口过期后，限流自动恢复")
     void testTryAcquire_Reset_AfterWindowExpires() throws InterruptedException {
-        redisRateLimiter = new RedisRateLimiter(realRedisTemplate, mock(SimpleRateLimiter.class), redisFallbackRatio);
+        redisRateLimiter = new RedisRateLimiter(realRedisTemplate, mock(SimpleRateLimiter.class), mock(RedisMetrics.class), redisFallbackRatio);
         int limit = 1;
         int window = 2;
 
@@ -106,7 +106,7 @@ public class RedisRateLimiterTest {
     @Test
     @DisplayName("并发原子性测试：100个线程并发请求，验证最终成功数")
     void testTryAcquire_Concurrency_Atomicity() throws InterruptedException {
-        redisRateLimiter = new RedisRateLimiter(realRedisTemplate, mock(SimpleRateLimiter.class), redisFallbackRatio);
+        redisRateLimiter = new RedisRateLimiter(realRedisTemplate, mock(SimpleRateLimiter.class), mock(RedisMetrics.class), redisFallbackRatio);
         int limit = 10;
         int window = 20;
         int threadCount = 100;
@@ -151,7 +151,7 @@ public class RedisRateLimiterTest {
         SimpleRateLimiter mockFallbackLimiter = mock(SimpleRateLimiter.class);
 
         // 2. 使用这些 Mock 依赖来手动构造被测对象
-        redisRateLimiter = new RedisRateLimiter(mockRedisTemplate, mockFallbackLimiter, redisFallbackRatio);
+        redisRateLimiter = new RedisRateLimiter(mockRedisTemplate, mockFallbackLimiter, mock(RedisMetrics.class), redisFallbackRatio);
 
         // 3. 设定 Mock 对象的行为
         // 核心修复：这里必须匹配 4 个参数 (Script, Keys, Arg1, Arg2)

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hao.redis.dal.dao.mapper.StockSignalMapper">
+
+    <!-- 结果集映射：数据库下划线命名 -> Java 驼峰命名 -->
+    <resultMap id="StockSignalResultMap" type="com.hao.redis.dal.model.StockSignal">
+        <id     column="id"            property="id"            />
+        <result column="wind_code"     property="windCode"      />
+        <result column="strategy_id"   property="strategyId"    />
+        <result column="signal_type"   property="signalType"    />
+        <result column="trigger_price" property="triggerPrice"  />
+        <result column="signal_time"   property="signalTime"    />
+        <result column="trade_date"    property="tradeDate"     />
+        <result column="show_status"   property="showStatus"    />
+        <result column="risk_snapshot" property="riskSnapshot"  />
+        <result column="status"        property="status"        />
+    </resultMap>
+
+    <!--
+        按策略ID与交易日查询有效信号
+        命中索引：idx_strategy_date_status (strategy_id, trade_date, show_status)
+        条件说明：
+          - show_status = 1  只展示通过风控的信号
+          - status = 1       过滤逻辑删除记录
+          - ORDER BY signal_time DESC  最新信号排前
+    -->
+    <select id="selectByStrategyAndDate" resultMap="StockSignalResultMap">
+        SELECT
+            id, wind_code, strategy_id, signal_type,
+            trigger_price, signal_time, trade_date,
+            show_status, risk_snapshot, status
+        FROM tb_quant_stock_signal
+        WHERE strategy_id = #{strategyId}
+          AND trade_date  = #{tradeDate}
+          AND show_status = 1
+          AND status      = 1
+        ORDER BY signal_time DESC
+    </select>
+
+    <!--
+        查询所有有效策略+日期组合键（布隆过滤器 T+1 预热用）
+        格式：MOMENTUM_V2:2025-05-11
+
+        【重要】这里只过滤 status = 1（未逻辑删除），不过滤 show_status。
+        原因：布隆过滤器的职责是判断"这个 strategyId+tradeDate 组合是否在系统里存在过"，
+              与信号是否对外展示（show_status）无关。
+        若加上 show_status = 1 过滤，show_status=0 的策略日期组合不会被写入 Bloom，
+        后续任何查询都会被 L0 误拦截，直接返回空列表，永远无法到达 L2 和 DB。
+        show_status 的过滤是"业务可见性"逻辑，由 selectByStrategyAndDate 负责。
+    -->
+    <select id="selectAllDistinctKeys" resultType="string">
+        SELECT CONCAT(strategy_id, ':', DATE_FORMAT(trade_date, '%Y-%m-%d'))
+        FROM tb_quant_stock_signal
+        WHERE status = 1
+        GROUP BY strategy_id, trade_date
+    </select>
+
+    <!--
+        插入选股信号
+        useGeneratedKeys=true：回写自增主键到实体的 id 字段
+    -->
+    <insert id="insert" parameterType="com.hao.redis.dal.model.StockSignal"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_quant_stock_signal
+            (wind_code, strategy_id, signal_type, trigger_price,
+             signal_time, trade_date, show_status, risk_snapshot, status)
+        VALUES
+            (#{windCode}, #{strategyId}, #{signalType}, #{triggerPrice},
+             #{signalTime}, #{tradeDate}, #{showStatus}, #{riskSnapshot}, #{status})
+    </insert>
+
+</mapper>

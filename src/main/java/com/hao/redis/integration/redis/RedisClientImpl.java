@@ -1333,5 +1333,40 @@ public class RedisClientImpl implements RedisClient<String> {
         return Long.valueOf(1).equals(result);
     }
 
-    // 区域结束
+    /* ------------------ Pipeline ------------------ */
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <R> List<R> executePipelined(org.springframework.data.redis.core.RedisCallback<?> callback) {
+        // 【性能调优点：Pipeline 流水线】
+        // 适用场景：需要发送大量无依赖关系的指令（如批量写）。
+        // 原理：将多条命令在客户端缓冲，一次性发送给服务端，大幅降低网络往返延迟 (RTT)。
+        // 注意：Pipeline 模式下，回调函数内部无法立即获取执行结果，所有结果在方法最后统一返回。
+        List<Object> results = redisTemplate.executePipelined(callback);
+        return (List<R>) results;
+    }
+
+    @Override
+    public List<String> hmgetPipelined(String key, List<String> fieldList) {
+        validateKey(key, "key");
+        validateCollection(fieldList, "fieldList");
+
+        // 【性能调优点：Pipeline + HMGET 聚合】
+        // 适用场景：典型的 N+1 问题。针对微博详情列表获取，将 N 次查询哈希的操作聚合。
+        // 优化：利用 StringRedisConnection 进行强转，可以直接操作字符串，避免底层序列化带来的额外开销。
+        List<Object> results = redisTemplate.executePipelined((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+            org.springframework.data.redis.connection.StringRedisConnection stringConn =
+                    (org.springframework.data.redis.connection.StringRedisConnection) connection;
+            for (String field : fieldList) {
+                // 仅仅是发送指令，不等待结果
+                stringConn.hGet(key, field);
+            }
+            return null; // 必须返回 null，真正的结果在 executePipelined 返回收到的 results 列表中
+        });
+
+        // 结果类型转换：RedisTemplate 返回的是 Object 列表
+        return results.stream()
+                .map(obj -> obj != null ? obj.toString() : null)
+                .collect(Collectors.toList());
+    }
 }

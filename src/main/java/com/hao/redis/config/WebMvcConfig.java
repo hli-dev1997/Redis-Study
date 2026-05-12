@@ -45,6 +45,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // 2. 放行统计接口，避免误拦截。
         registry.addInterceptor(visitInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/system/uv", "/weibo/system/uv");
+                .excludePathPatterns(
+                        "/system/uv",
+                        "/weibo/system/uv",
+                        // 选股信号接口压测时 QPS 极高，每次 sadd 会产生大量 Redis 慢日志
+                        // 量化选股场景无需 UV 统计，直接排除
+                        "/stock/**"
+                );
     }
 }
